@@ -28,14 +28,14 @@ function presetRange(preset: Exclude<RangePreset, "custom">): { from: string; to
 const isDate = (s: string | null): s is string => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s);
 
 /** Reads the selected range from the URL so it survives reloads and can be bookmarked. Defaults to this tax year. */
-export function useDateRange(): [DateRange, (r: DateRange) => void] {
+export function useDateRange(defaultPreset: Exclude<RangePreset, "custom"> = "this_tax_year"): [DateRange, (r: DateRange) => void] {
   const [params, setParams] = useSearchParams();
-  const preset = (params.get("range") as RangePreset | null) ?? "this_tax_year";
+  const preset = (params.get("range") as RangePreset | null) ?? defaultPreset;
   let range: DateRange;
   if (preset === "custom" && isDate(params.get("from")) && isDate(params.get("to"))) {
     range = { preset, from: params.get("from")!, to: params.get("to")! };
   } else {
-    const p = preset === "custom" ? "this_tax_year" : preset;
+    const p = preset === "custom" ? defaultPreset : preset;
     range = { preset: p, ...presetRange(p) };
   }
   const set = (r: DateRange) => {
@@ -43,7 +43,7 @@ export function useDateRange(): [DateRange, (r: DateRange) => void] {
     next.set("range", r.preset);
     if (r.preset === "custom") { next.set("from", r.from); next.set("to", r.to); }
     else { next.delete("from"); next.delete("to"); }
-    if (r.preset === "this_tax_year") next.delete("range");
+    if (r.preset === defaultPreset) next.delete("range");
     setParams(next, { replace: true });
   };
   return [range, set];

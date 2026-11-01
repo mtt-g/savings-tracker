@@ -1,7 +1,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Dashboard, PeriodStats } from "../../shared/calc";
 import type { LotComparison } from "../../shared/lots";
-import type { Account, Goal, Holding, Settings, ShareLot, SyncRun, Transaction, TxType, Valuation } from "../../shared/types";
+import type { Account, Goal, Holding, Settings, ShareLot, SyncRun, Trade, Transaction, TxType, Valuation } from "../../shared/types";
 
 export class ApiError extends Error {
   readonly status: number;
@@ -87,6 +87,12 @@ export const useTransactions = (filters: TransactionFilters) =>
     placeholderData: keepPreviousData,
   });
 
+export const useTrades = (accountId: number, from?: string, to?: string) =>
+  useQuery({
+    queryKey: ["trades", accountId, from, to],
+    queryFn: () => api.get<Trade[]>(`/accounts/${accountId}/trades${qs({ from, to })}`),
+    placeholderData: keepPreviousData,
+  });
 export const useShareLots = () => useQuery({ queryKey: ["share-lots"], queryFn: () => api.get<LotComparison[]>("/share-lots") });
 export const useSettings = () => useQuery({ queryKey: ["settings"], queryFn: () => api.get<Settings>("/settings") });
 export const useGoals = () => useQuery({ queryKey: ["goals"], queryFn: () => api.get<Goal[]>("/goals") });

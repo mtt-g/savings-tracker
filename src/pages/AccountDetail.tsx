@@ -35,6 +35,7 @@ import { ErrorAlert } from "../components/ErrorAlert";
 import { useResolvedMode } from "../components/Layout";
 import { StatCard } from "../components/StatCard";
 import { SyncButton } from "../components/SyncButton";
+import { TradesPanel } from "../components/TradesPanel";
 import { TransactionDialog } from "../components/TransactionDialog";
 import { TransactionsTable } from "../components/TransactionsTable";
 import { ValuationDialog } from "../components/ValuationDialog";
@@ -88,6 +89,7 @@ export function AccountDetail() {
         <Tab value="overview" label="Overview" />
         <Tab value="transactions" label={`Transactions (${transactions.length})`} />
         {hasHoldings && <Tab value="holdings" label="Holdings" />}
+        {account.t212_link && <Tab value="trades" label="Trades" />}
         {isInvestmentType(account.type) && <Tab value="cost" label="Cost basis" />}
         <Tab value="balances" label="Balances" />
       </Tabs>
@@ -95,6 +97,7 @@ export function AccountDetail() {
       {tab === "overview" && <Overview data={data} color={color} />}
       {tab === "transactions" && <Card><TransactionsTable transactions={transactions} showAccount={false} /></Card>}
       {tab === "holdings" && hasHoldings && <Holdings data={data} />}
+      {tab === "trades" && account.t212_link && <TradesPanel accountId={id} />}
       {tab === "cost" && isInvestmentType(account.type) && <CostBasisPanel accountId={id} holdings={data.holdings} />}
       {tab === "balances" && <Balances data={data} />}
 

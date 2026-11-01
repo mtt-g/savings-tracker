@@ -4,7 +4,7 @@ import { accountHistory, buildLedgers, computeDashboard, Ledger, periodStats } f
 import { todayLondon } from "../shared/dates";
 import { taxYearOf, taxYearRange } from "../shared/tax";
 import { compareLots } from "../shared/lots";
-import type { Holding, ShareLot, SyncRun } from "../shared/types";
+import type { Holding, ShareLot, SyncRun, Trade } from "../shared/types";
 import { getAccount, getAccounts, getGoals, getSettings, getTransactions, getValuations } from "./db";
 import { credentialsFor, runSync } from "./t212";
 import type { AppEnv } from "./types";
@@ -276,6 +276,22 @@ api.delete("/goals/:id", async (c) => {
   return c.body(null, 204);
 });
 
+// ---------- Trades ----------
+
+api.get("/accounts/:id/trades", async (c) => {
+  const id = idParam(c.req.param("id"));
+  const where = ["account_id = ?"];
+  const binds: unknown[] = [id];
+  const from = c.req.query("from");
+  if (from) { where.push("date >= ?"); binds.push(parse(isoDate, from, "from")); }
+  const to = c.req.query("to");
+  if (to) { where.push("date <= ?"); binds.push(parse(isoDate, to, "to")); }
+  const { results } = await c.env.DB.prepare(`SELECT * FROM trades WHERE ${where.join(" AND ")} ORDER BY date DESC, id DESC LIMIT 5000`)
+    .bind(...binds)
+    .all<Trade>();
+  return c.json(results);
+});
+
 // ---------- Share lots (cost basis) ----------
 
 api.get("/share-lots", async (c) => {
@@ -334,7 +350,7 @@ api.delete("/share-lots/:id", async (c) => {
 
 api.get("/export", async (c) => {
   const db = c.env.DB;
-  const tables = ["accounts", "transactions", "valuations", "holdings", "share_lots", "goals", "settings"] as const;
+  const tables = ["accounts", "transactions", "valuations", "holdings", "trades", "share_lots", "goals", "settings"] as const;
   const data = Object.fromEntries(
     await Promise.all(tables.map(async (t) => [t, (await db.prepare(`SELECT * FROM ${t}`).all()).results] as const)),
   );

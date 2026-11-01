@@ -10,10 +10,12 @@ import type { Account, T212Link, TxType } from "../shared/types";
 const BASE = "https://live.trading212.com";
 const PAGE_LIMIT = 50;
 /**
- * History endpoints allow 20 requests a minute. Capping pages per stream per run keeps us under that
- * and under the Workers subrequest limit. A long history backfills over several runs.
+ * History endpoints allow 20 requests a minute, and a free-plan Worker may make 50 subrequests (fetches and
+ * D1 calls) per invocation. Each page costs two (one fetch, one D1 batch), and a sync reads three streams
+ * plus two summary calls, so capping at 5 pages per stream keeps one account's sync near 35. A long history
+ * backfills over several runs.
  */
-const MAX_PAGES_PER_RUN = 8;
+const MAX_PAGES_PER_RUN = 5;
 
 interface AccountSummary {
   currency: string;
@@ -51,6 +53,45 @@ interface HistoryDividend {
   reference: string;
   ticker: string;
   type: string;
+}
+
+interface HistoricalOrderItem {
+  order?: {
+    id: number;
+    side?: "BUY" | "SELL";
+    ticker?: string;
+    currency?: string;
+    instrument?: { ticker?: string; name?: string; isin?: string; currency?: string };
+  };
+  fill?: {
+    id: number;
+    filledAt: string;
+    price?: number;
+    quantity: number;
+    type?: string;
+    walletImpact?: {
+      currency?: string;
+      netValue?: number;
+      realisedProfitLoss?: number;
+      taxes?: { name?: string; quantity?: number; currency?: string }[];
+    };
+  };
+}
+
+export interface TradeRow {
+  date: string;
+  side: "buy" | "sell";
+  kind: string;
+  ticker: string;
+  name: string | null;
+  isin: string | null;
+  currency: string | null;
+  quantity: number;
+  price: number | null;
+  value_pence: number | null;
+  fees_pence: number;
+  realised_pl_pence: number | null;
+  external_ref: string;
 }
 
 interface Row {
@@ -116,6 +157,48 @@ export function mapDividend(d: HistoryDividend): Row | null {
   };
 }
 
+export function mapOrder(item: HistoricalOrderItem): TradeRow | null {
+  const { order, fill } = item;
+  if (!order || !fill) return null;
+  const quantity = Math.abs(fill.quantity);
+  const ticker = order.ticker ?? order.instrument?.ticker;
+  if (!quantity || !ticker) return null;
+  const side = order.side === "SELL" ? "sell" : order.side === "BUY" ? "buy" : fill.quantity < 0 ? "sell" : "buy";
+  const wallet = fill.walletImpact;
+  // Only trust money amounts reported in the account's own currency.
+  const gbp = !wallet?.currency || wallet.currency === "GBP";
+  const fees = gbp ? (wallet?.taxes ?? []).reduce((n, t) => n + (!t.currency || t.currency === "GBP" ? Math.abs(toPence(t.quantity ?? 0)) : 0), 0) : 0;
+  return {
+    date: londonDateOf(fill.filledAt),
+    side,
+    kind: fill.type ?? "TRADE",
+    ticker,
+    name: order.instrument?.name ?? null,
+    isin: order.instrument?.isin ?? null,
+    currency: order.instrument?.currency ?? order.currency ?? null,
+    quantity,
+    price: fill.price ?? null,
+    value_pence: gbp && wallet?.netValue != null ? Math.abs(toPence(wallet.netValue)) : null,
+    fees_pence: fees,
+    realised_pl_pence: gbp && wallet?.realisedProfitLoss != null ? toPence(wallet.realisedProfitLoss) : null,
+    external_ref: `fill:${fill.id}`,
+  };
+}
+
+async function insertTradeRows(db: D1Database, accountId: number, rows: TradeRow[]): Promise<number> {
+  if (!rows.length) return 0;
+  const stmt = db.prepare(
+    `INSERT OR IGNORE INTO trades (account_id, date, side, kind, ticker, name, isin, currency, quantity, price, value_pence, fees_pence, realised_pl_pence, source, external_ref)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 't212', ?)`,
+  );
+  const results = await db.batch(
+    rows.map((r) =>
+      stmt.bind(accountId, r.date, r.side, r.kind, r.ticker, r.name, r.isin, r.currency, r.quantity, r.price, r.value_pence, r.fees_pence, r.realised_pl_pence, r.external_ref),
+    ),
+  );
+  return results.reduce((n, r) => n + (r.meta.changes ?? 0), 0);
+}
+
 async function insertRows(db: D1Database, accountId: number, rows: Row[]): Promise<number> {
   if (!rows.length) return 0;
   const stmt = db.prepare(
@@ -126,31 +209,20 @@ async function insertRows(db: D1Database, accountId: number, rows: Row[]): Promi
   return results.reduce((n, r) => n + (r.meta.changes ?? 0), 0);
 }
 
-async function countKnown(db: D1Database, accountId: number, refs: string[]): Promise<number> {
-  if (!refs.length) return 0;
-  const row = await db
-    .prepare(
-      `SELECT COUNT(*) AS n FROM transactions WHERE account_id = ? AND source = 't212'
-       AND external_ref IN (SELECT value FROM json_each(?))`,
-    )
-    .bind(accountId, JSON.stringify(refs))
-    .first<{ n: number }>();
-  return row?.n ?? 0;
-}
-
 /**
  * Pulls one paginated history stream (newest first).
  * First runs walk back through the full history, saving a cursor so the next run continues where
  * this one stopped. Once that's done, each run reads from the newest page until it reaches items
  * it already has.
  */
-async function syncStream<T>(
+async function syncStream<T, R extends { external_ref: string }>(
   db: D1Database,
   auth: string,
   accountId: number,
-  stream: "transactions" | "dividends",
+  stream: "transactions" | "dividends" | "orders",
   firstPath: string,
-  map: (item: T) => Row | null,
+  map: (item: T) => R | null,
+  insert: (rows: R[]) => Promise<number>,
 ): Promise<{ inserted: number; backfillDone: boolean }> {
   const state = await db
     .prepare("SELECT backfill_cursor, backfill_done FROM sync_state WHERE account_id = ? AND stream = ?")
@@ -161,14 +233,15 @@ async function syncStream<T>(
   let pages = 0;
 
   if (state?.backfill_done) {
+    // Caught up: read from the newest page and stop once a page contains rows we already have.
     let path: string | null = firstPath;
     while (path && pages < MAX_PAGES_PER_RUN) {
       const page: Page<T> = await t212Get<Page<T>>(auth, path);
       pages++;
-      const rows = page.items.map(map).filter((r): r is Row => r !== null);
-      const known = await countKnown(db, accountId, rows.map((r) => r.external_ref));
-      inserted += await insertRows(db, accountId, rows);
-      if (known > 0) break;
+      const rows = page.items.map(map).filter((r): r is R => r !== null);
+      const added = await insert(rows);
+      inserted += added;
+      if (rows.length > 0 && added < rows.length) break;
       path = page.nextPagePath;
     }
     return { inserted, backfillDone: true };
@@ -178,7 +251,7 @@ async function syncStream<T>(
   while (path && pages < MAX_PAGES_PER_RUN) {
     const page: Page<T> = await t212Get<Page<T>>(auth, path);
     pages++;
-    inserted += await insertRows(db, accountId, page.items.map(map).filter((r): r is Row => r !== null));
+    inserted += await insert(page.items.map(map).filter((r): r is R => r !== null));
     path = page.nextPagePath;
   }
   const done = path === null;
@@ -235,11 +308,15 @@ export async function syncAccount(env: Env, account: Account): Promise<string> {
     ),
   ]);
 
-  const tx = await syncStream<HistoryTransaction>(
-    db, auth, account.id, "transactions", `/equity/history/transactions?limit=${PAGE_LIMIT}`, mapTransaction,
+  const insertTx = (rows: Row[]) => insertRows(db, account.id, rows);
+  const tx = await syncStream<HistoryTransaction, Row>(
+    db, auth, account.id, "transactions", `/equity/history/transactions?limit=${PAGE_LIMIT}`, mapTransaction, insertTx,
   );
-  const div = await syncStream<HistoryDividend>(
-    db, auth, account.id, "dividends", `/equity/history/dividends?limit=${PAGE_LIMIT}`, mapDividend,
+  const div = await syncStream<HistoryDividend, Row>(
+    db, auth, account.id, "dividends", `/equity/history/dividends?limit=${PAGE_LIMIT}`, mapDividend, insertTx,
+  );
+  const ord = await syncStream<HistoricalOrderItem, TradeRow>(
+    db, auth, account.id, "orders", `/equity/history/orders?limit=${PAGE_LIMIT}`, mapOrder, (rows) => insertTradeRows(db, account.id, rows),
   );
 
   const parts = [
@@ -247,8 +324,9 @@ export async function syncAccount(env: Env, account: Account): Promise<string> {
     `${positions.length} holdings`,
     `${tx.inserted} new transactions`,
     `${div.inserted} new dividends`,
+    `${ord.inserted} new trades`,
   ];
-  if (!tx.backfillDone || !div.backfillDone) parts.push("history still loading, sync again in a minute to continue");
+  if (!tx.backfillDone || !div.backfillDone || !ord.backfillDone) parts.push("history still loading, sync again in a minute to continue");
   return parts.join(", ");
 }
 

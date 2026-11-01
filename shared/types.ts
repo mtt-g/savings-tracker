@@ -134,3 +134,25 @@ export interface ShareLot {
   market_per_share_pence: number | null;
   notes: string | null;
 }
+
+export interface Trade {
+  id: number;
+  account_id: number;
+  date: string;
+  side: "buy" | "sell";
+  /** "TRADE", or a corporate action such as "STOCK_SPLIT". */
+  kind: string;
+  ticker: string;
+  name: string | null;
+  isin: string | null;
+  currency: string | null;
+  quantity: number;
+  /** Per share, in the instrument's currency. */
+  price: number | null;
+  /** Net value in pence in the account currency. */
+  value_pence: number | null;
+  fees_pence: number;
+  realised_pl_pence: number | null;
+  source: string;
+  external_ref: string;
+}
