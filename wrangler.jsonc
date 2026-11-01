@@ -23,8 +23,8 @@
   },
   "vars": {
     // Cloudflare Access settings, see README. The API refuses requests until these are set.
-    "ACCESS_TEAM_DOMAIN": "",
-    "ACCESS_AUD": ""
+    "ACCESS_TEAM_DOMAIN": "matt-gee.cloudflareaccess.com",
+    "ACCESS_AUD": "56d7096831a1dc2fdd731f0a69408552d98a6920a926ad1874799a4dbf073439"
   },
   "observability": { "enabled": true }
 }

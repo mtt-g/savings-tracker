@@ -48,10 +48,12 @@ npm run dev                        # http://localhost:5173
    - Deploy command: `npm run deploy:ci` (applies any new D1 migrations, then deploys)
    - Production branch: `main`
 3. **Lock it down with Cloudflare Access** (free for up to 50 users):
-   - Zero Trust → Access → Applications → Add → Self-hosted. Add your `*.workers.dev` hostname (and any custom domain).
-     Add a policy that allows only your email address, and use the One-time PIN or Google login method.
-   - Alternatively, on the Worker → Settings → Domains & Routes, turn on Cloudflare Access for `workers.dev`, and for preview URLs if you use them.
-   - Copy the application's **Audience (AUD) tag** and your **team domain** (`<team>.cloudflareaccess.com`) into the `vars` in `wrangler.jsonc`, then push.
+   - Go to Workers & Pages → savings-tracker → **Access** tab → **Protect this Worker behind Access**. Choose **All traffic**.
+     Under **Authentication policy** choose **Cloudflare account**, then select **Apply Access**. This covers the `workers.dev`
+     URL, preview URLs and any custom domains.
+   - Copy the **Application Audience (AUD) Tag** from Zero Trust → Access controls → Applications → the application → Configure → Additional settings.
+     Your team domain is the `<team>.cloudflareaccess.com` address on the login page.
+   - Put both in the `vars` in `wrangler.jsonc` (`ACCESS_TEAM_DOMAIN`, `ACCESS_AUD`), then push.
      **Until both are set, the API refuses every request.** The Worker checks the Access token on every API call, so
      your data stays private even if the Access setup is wrong.
 4. **Add your Trading 212 API keys** as secrets. In the T212 app go to Settings → API, create one key per account, and give it the
