@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeDashboard, Ledger, periodStats } from "./calc";
+import { balanceEffect, computeDashboard, Ledger, periodStats } from "./calc";
 import { monthEndsBetween } from "./dates";
 import { taxYearLabel, taxYearOf } from "./tax";
 import type { Account, Transaction, TxType, Valuation } from "./types";
@@ -95,6 +95,24 @@ describe("periodStats", () => {
     const l = new Ledger([tx(1, "2025-04-05", "deposit", 10_000), tx(1, "2026-04-05", "interest", 400)], []);
     const s = periodStats(l, "2025-04-06", "2026-04-05");
     expect(s.effectiveRate).toBeCloseTo(4, 1);
+  });
+});
+
+describe("Premium Bond prizes", () => {
+  it("are earnings that never change the balance", () => {
+    const l = new Ledger([tx(1, "2026-04-05", "deposit", 50_000), tx(1, "2026-06-01", "prize", 25), tx(1, "2026-08-01", "prize", 100)], []);
+    expect(balanceEffect(tx(1, "2026-06-01", "prize", 25))).toBe(0);
+    expect(l.valueAt("2026-10-31")).toBe(50_000_00);
+    const s = periodStats(l, "2026-04-06", "2026-10-31");
+    expect(s.startValue).toBe(50_000_00);
+    expect(s.endValue).toBe(50_000_00);
+    expect(s.prizes).toBe(125_00);
+    expect(s.prizeCount).toBe(2);
+    expect(s.income).toBe(125_00);
+    expect(s.growth).toBe(125_00);
+    expect(s.netContributions).toBe(0);
+    expect(s.averageBalance).toBeCloseTo(50_000_00, 0);
+    expect(s.effectiveRate).toBeCloseTo((125 / 50_000) * (365 / 209) * 100, 2);
   });
 });
 

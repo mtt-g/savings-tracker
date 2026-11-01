@@ -85,7 +85,13 @@ export function TransactionDialog({ open, onClose, transaction, defaultAccountId
           <DatePicker label="Date" value={date} onChange={setDate} disableFuture format="DD/MM/YYYY" slotProps={{ textField: { size: "small", fullWidth: true } }} />
           <MoneyField label="Amount" value={amount} onChange={setAmount} autoFocus={!transaction}
             error={amount !== "" && (pence === null || pence <= 0)}
-            helperText={account?.t212_link && !transaction ? "Synced from Trading 212 automatically, so only add things the sync misses" : undefined} />
+            helperText={
+              type === "prize"
+                ? "Counts as earnings only. It doesn't change the balance, so add a deposit too if you reinvest it"
+                : account?.t212_link && !transaction
+                  ? "Synced from Trading 212 automatically, so only add things the sync misses"
+                  : undefined
+            } />
           <TextField label="Notes" value={notes} onChange={(e) => setNotes(e.target.value)} multiline maxRows={3} />
         </Stack>
       </DialogContent>

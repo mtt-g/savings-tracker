@@ -33,6 +33,14 @@ export const TX_SIGN: Record<TxType, 1 | -1> = {
   transfer_out: -1,
 };
 
+/**
+ * How a transaction changes the account balance, in pence. Premium Bond prizes are earnings that are
+ * paid out rather than added to the holding, so they are tracked as income but never change the balance.
+ * If prizes are reinvested, record that as a deposit.
+ */
+export const balanceEffect = (t: { type: TxType; amount_pence: number }): number =>
+  t.type === "prize" ? 0 : TX_SIGN[t.type] * t.amount_pence;
+
 /** Money moving into or out of an account from outside it, as opposed to money the account earned. */
 export const isContribution = (t: TxType) =>
   t === "deposit" || t === "withdrawal" || t === "transfer_in" || t === "transfer_out";
@@ -67,7 +75,7 @@ export class Ledger {
     this.vals = [...vals].sort((a, b) => a.date.localeCompare(b.date));
     this.prefix = [0];
     for (const t of this.txs) {
-      this.prefix.push(this.prefix[this.prefix.length - 1] + TX_SIGN[t.type] * t.amount_pence);
+      this.prefix.push(this.prefix[this.prefix.length - 1] + balanceEffect(t));
     }
   }
 
@@ -163,7 +171,7 @@ export interface PeriodStats extends FlowTotals {
   netContributions: number;
   /** Interest + prizes + dividends + bonuses. */
   income: number;
-  /** Total change not explained by contributions: end - start - contributions. */
+  /** Total gain not explained by contributions: end - start - contributions, plus any prizes paid out. */
   growth: number;
   /** Growth not explained by income or fees, i.e. market movement on investments. */
   marketGain: number;
@@ -221,7 +229,8 @@ function finishStats(
 ): PeriodStats {
   const netContributions = flows.deposits - flows.withdrawals + flows.transfersIn - flows.transfersOut;
   const income = flows.interest + flows.prizes + flows.dividends + flows.bonuses;
-  const growth = endValue - startValue - netContributions;
+  // Prizes are paid out, so they sit outside the balance but still count towards total growth.
+  const growth = endValue - startValue - netContributions + flows.prizes;
   const days = daysBetween(from, to) + 1;
   const earned = flows.interest + flows.prizes + flows.bonuses;
   return {
@@ -232,7 +241,7 @@ function finishStats(
     income,
     growth,
     marketGain: growth - income + flows.fees,
-    returnPct: modifiedDietz(startValue, endValue, contribFlows, from, to),
+    returnPct: modifiedDietz(startValue, endValue + flows.prizes, contribFlows, from, to),
     averageBalance,
     effectiveRate: averageBalance > 0 ? (earned / averageBalance) * (365 / days) * 100 : null,
   };

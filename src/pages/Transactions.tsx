@@ -1,7 +1,7 @@
 import UploadFileIcon from "@mui/icons-material/UploadFile";
 import { Box, Button, Card, MenuItem, Stack, TextField, Typography } from "@mui/material";
 import { useState } from "react";
-import { TX_SIGN } from "../../shared/calc";
+import { balanceEffect } from "../../shared/calc";
 import { TX_TYPE_LABELS, TX_TYPES, type TxType } from "../../shared/types";
 import { useAccounts, useTransactions } from "../api/client";
 import { CsvImportDialog } from "../components/CsvImportDialog";
@@ -22,14 +22,14 @@ export function Transactions() {
     from: range.from === "all" ? undefined : range.from,
     to: range.to,
   });
-  const net = transactions.reduce((s, t) => s + TX_SIGN[t.type] * t.amount_pence, 0);
+  const net = transactions.reduce((s, t) => s + balanceEffect(t), 0);
 
   return (
     <Stack spacing={3}>
       <Stack direction={{ xs: "column", sm: "row" }} spacing={2} sx={{ justifyContent: "space-between", alignItems: { sm: "center" } }}>
         <Box>
           <Typography variant="h4" sx={{ fontWeight: 500 }}>Transactions</Typography>
-          <Typography color="text.secondary">{transactions.length} transactions, {money(net)} net</Typography>
+          <Typography color="text.secondary">{transactions.length} transactions, {money(net)} net change in balances</Typography>
         </Box>
         <Button variant="outlined" startIcon={<UploadFileIcon />} onClick={() => setImporting(true)}>Import CSV</Button>
       </Stack>

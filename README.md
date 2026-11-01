@@ -21,7 +21,7 @@ It costs nothing on Cloudflare's free plan.
 - Money is stored in pence. Dates are UK dates.
 - **Balance on a date** = the most recent recorded balance (valuation) on or before that date, plus the transactions after it. Cash accounts don't need valuations. Investment accounts do, and the T212 sync records one every day.
 - **Saved** = deposits − withdrawals ± transfers.
-- **Growth** = end balance − start balance − saved. **From prices** = growth − interest/dividends/prizes + fees.
+- **Growth** = end balance − start balance − saved, plus any Premium Bond prizes (which are paid out, not added to the balance). **From prices** = growth − interest/dividends/prizes + fees.
 - **Return %** is a Modified Dietz return for the period: money-weighted, so deposits made part-way through don't distort it.
 - **Rate earned** = (interest + prizes) ÷ average balance, annualised.
 
@@ -71,7 +71,8 @@ npm run dev                        # http://localhost:5173
 
 - The T212 API covers Invest and Stocks ISA accounts but **not the Cash ISA**. Add its interest by hand or import a CSV.
 - Monzo's API needs re-authorising every 90 days, so use CSV exports or add interest by hand.
-- NS&I has no API. Add prizes with the + button. If prizes are reinvested, they're already part of the holding. If they're paid out, also add a withdrawal.
+- NS&I has no API. Add prizes with the + button (type **Prize**). Prizes count as earnings but never change the balance, so there's no
+  need to record where the money went. If you reinvest a prize into more bonds, add a **Deposit** for it too.
 - Moving money between your own accounts: record a **transfer out** and a **transfer in**, so it doesn't count as new savings.
   T212 moves between Invest and ISA come through the sync as transfers automatically.
 - **Backups**: Settings → Export JSON. D1 Time Travel also allows point-in-time restores for the last 7 days.

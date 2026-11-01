@@ -1,6 +1,6 @@
 import { Box, Chip, Table, TableBody, TableCell, TableHead, TablePagination, TableRow, Typography } from "@mui/material";
 import { useEffect, useState } from "react";
-import { TX_SIGN } from "../../shared/calc";
+import { balanceEffect } from "../../shared/calc";
 import { TX_TYPE_LABELS, type Transaction } from "../../shared/types";
 import { useAccounts } from "../api/client";
 import { date, money } from "../format";
@@ -33,7 +33,8 @@ export function TransactionsTable({ transactions, showAccount = true }: { transa
           </TableHead>
           <TableBody>
             {rows.map((t) => {
-              const signed = TX_SIGN[t.type] * t.amount_pence;
+              const signed = balanceEffect(t);
+              const paidOut = t.type === "prize";
               return (
                 <TableRow key={t.id} hover onClick={() => setEditing(t)} sx={{ cursor: "pointer" }}>
                   <TableCell sx={{ whiteSpace: "nowrap" }}>{date(t.date)}</TableCell>
@@ -44,7 +45,14 @@ export function TransactionsTable({ transactions, showAccount = true }: { transa
                   </TableCell>
                   <TableCell sx={{ maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "text.secondary" }}>{t.notes}</TableCell>
                   <TableCell align="right" sx={{ fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
-                    {signed < 0 ? "−" : "+"}{money(Math.abs(signed))}
+                    {paidOut ? (
+                      <>
+                        {money(t.amount_pence)}
+                        <Typography component="span" variant="caption" color="text.secondary" sx={{ display: "block" }}>paid out</Typography>
+                      </>
+                    ) : (
+                      <>{signed < 0 ? "−" : "+"}{money(Math.abs(signed))}</>
+                    )}
                   </TableCell>
                 </TableRow>
               );
