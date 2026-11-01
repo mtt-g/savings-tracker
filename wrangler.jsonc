@@ -1,0 +1,30 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "savings-tracker",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    // The React app. API requests go to the Worker first; any other unknown path serves index.html.
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "savings-tracker",
+      "database_id": "d476fa4c-354f-4c21-a5d9-8435e97c0e9d",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "triggers": {
+    // Daily Trading 212 sync at 06:15 UTC
+    "crons": ["15 6 * * *"]
+  },
+  "vars": {
+    // Cloudflare Access settings, see README. The API refuses requests until these are set.
+    "ACCESS_TEAM_DOMAIN": "",
+    "ACCESS_AUD": ""
+  },
+  "observability": { "enabled": true }
+}

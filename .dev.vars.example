@@ -1,0 +1,9 @@
+# Copy to .dev.vars for local development (never commit .dev.vars).
+# Skips the Cloudflare Access check locally.
+ENVIRONMENT=development
+
+# Trading 212 API credentials (Settings > API in the T212 app). One pair per T212 account.
+T212_INVEST_KEY=
+T212_INVEST_SECRET=
+T212_ISA_KEY=
+T212_ISA_SECRET=
