@@ -25,10 +25,11 @@ import {
 } from "@mui/material";
 import { LineChart, lineClasses } from "@mui/x-charts/LineChart";
 import { useState } from "react";
-import { useParams } from "react-router";
+import { useParams, useSearchParams } from "react-router";
 import { ACCOUNT_TYPE_LABELS, isInvestmentType, PROVIDER_LABELS } from "../../shared/types";
 import { api, useAccount, useAccounts, useApiMutation, useTransactions, type AccountDetail as Detail } from "../api/client";
 import { AccountDialog } from "../components/AccountDialog";
+import { CostBasisPanel } from "../components/CostBasisPanel";
 import { CsvImportDialog } from "../components/CsvImportDialog";
 import { ErrorAlert } from "../components/ErrorAlert";
 import { useResolvedMode } from "../components/Layout";
@@ -47,7 +48,9 @@ export function AccountDetail() {
   const { data: accounts = [] } = useAccounts();
   const { data: transactions = [] } = useTransactions({ account_id: id });
   const mode = useResolvedMode();
-  const [tab, setTab] = useState("overview");
+  const [params, setParams] = useSearchParams();
+  const tab = params.get("tab") ?? "overview";
+  const setTab = (v: string) => setParams(v === "overview" ? {} : { tab: v }, { replace: true });
   const [dialog, setDialog] = useState<"edit" | "tx" | "valuation" | "import" | null>(null);
 
   if (isLoading) return <Typography color="text.secondary">Loading…</Typography>;
@@ -85,12 +88,14 @@ export function AccountDetail() {
         <Tab value="overview" label="Overview" />
         <Tab value="transactions" label={`Transactions (${transactions.length})`} />
         {hasHoldings && <Tab value="holdings" label="Holdings" />}
+        {isInvestmentType(account.type) && <Tab value="cost" label="Cost basis" />}
         <Tab value="balances" label="Balances" />
       </Tabs>
 
       {tab === "overview" && <Overview data={data} color={color} />}
       {tab === "transactions" && <Card><TransactionsTable transactions={transactions} showAccount={false} /></Card>}
       {tab === "holdings" && hasHoldings && <Holdings data={data} />}
+      {tab === "cost" && isInvestmentType(account.type) && <CostBasisPanel accountId={id} holdings={data.holdings} />}
       {tab === "balances" && <Balances data={data} />}
 
       <AccountDialog open={dialog === "edit"} onClose={() => setDialog(null)} account={account} />

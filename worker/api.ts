@@ -3,7 +3,8 @@ import { HTTPException } from "hono/http-exception";
 import { accountHistory, buildLedgers, computeDashboard, Ledger, periodStats } from "../shared/calc";
 import { todayLondon } from "../shared/dates";
 import { taxYearOf, taxYearRange } from "../shared/tax";
-import type { Holding, SyncRun } from "../shared/types";
+import { compareLots } from "../shared/lots";
+import type { Holding, ShareLot, SyncRun } from "../shared/types";
 import { getAccount, getAccounts, getGoals, getSettings, getTransactions, getValuations } from "./db";
 import { credentialsFor, runSync } from "./t212";
 import type { AppEnv } from "./types";
@@ -14,6 +15,7 @@ import {
   isoDate,
   parse,
   settingsInput,
+  shareLotInput,
   transactionInput,
   valuationInput,
 } from "./validate";
@@ -274,11 +276,65 @@ api.delete("/goals/:id", async (c) => {
   return c.body(null, 204);
 });
 
+// ---------- Share lots (cost basis) ----------
+
+api.get("/share-lots", async (c) => {
+  const db = c.env.DB;
+  const today = todayLondon();
+  const { results: lots } = await db.prepare("SELECT * FROM share_lots ORDER BY acquired_on, id").all<ShareLot>();
+  if (!lots.length) return c.json([]);
+  const [accounts, transactions, valuations, holdings] = await Promise.all([
+    getAccounts(db),
+    getTransactions(db),
+    getValuations(db),
+    db
+      .prepare(
+        `SELECT h.* FROM holdings h JOIN (SELECT account_id, MAX(date) AS d FROM holdings GROUP BY account_id) m
+         ON m.account_id = h.account_id AND m.d = h.date`,
+      )
+      .all<Holding>(),
+  ]);
+  const ledgers = buildLedgers(accounts, transactions, valuations);
+  const balances = new Map(accounts.map((a) => [a.id, ledgers.get(a.id)!.valueAt(today)]));
+  return c.json(compareLots(lots, { holdings: holdings.results, balances }));
+});
+
+api.post("/share-lots", async (c) => {
+  const l = parse(shareLotInput, await c.req.json());
+  if (!(await getAccount(c.env.DB, l.account_id))) throw notFound();
+  const row = await c.env.DB.prepare(
+    `INSERT INTO share_lots (account_id, name, ticker, acquired_on, quantity, paid_per_share_pence, market_per_share_pence, notes)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING *`,
+  )
+    .bind(l.account_id, l.name, l.ticker || null, l.acquired_on, l.quantity, l.paid_per_share_pence, l.market_per_share_pence, l.notes)
+    .first();
+  return c.json(row, 201);
+});
+
+api.put("/share-lots/:id", async (c) => {
+  const id = idParam(c.req.param("id"));
+  const l = parse(shareLotInput, await c.req.json());
+  const row = await c.env.DB.prepare(
+    `UPDATE share_lots SET account_id = ?, name = ?, ticker = ?, acquired_on = ?, quantity = ?, paid_per_share_pence = ?,
+     market_per_share_pence = ?, notes = ? WHERE id = ? RETURNING *`,
+  )
+    .bind(l.account_id, l.name, l.ticker || null, l.acquired_on, l.quantity, l.paid_per_share_pence, l.market_per_share_pence, l.notes, id)
+    .first();
+  if (!row) throw notFound();
+  return c.json(row);
+});
+
+api.delete("/share-lots/:id", async (c) => {
+  const r = await c.env.DB.prepare("DELETE FROM share_lots WHERE id = ?").bind(idParam(c.req.param("id"))).run();
+  if (!r.meta.changes) throw notFound();
+  return c.body(null, 204);
+});
+
 // ---------- Export ----------
 
 api.get("/export", async (c) => {
   const db = c.env.DB;
-  const tables = ["accounts", "transactions", "valuations", "holdings", "goals", "settings"] as const;
+  const tables = ["accounts", "transactions", "valuations", "holdings", "share_lots", "goals", "settings"] as const;
   const data = Object.fromEntries(
     await Promise.all(tables.map(async (t) => [t, (await db.prepare(`SELECT * FROM ${t}`).all()).results] as const)),
   );

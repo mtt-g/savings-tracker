@@ -28,6 +28,7 @@ import { Link } from "react-router";
 import type { Dashboard as DashboardData } from "../../shared/calc";
 import { isInvestmentType } from "../../shared/types";
 import { useAccounts, useDashboard } from "../api/client";
+import { CostBasisPanel } from "../components/CostBasisPanel";
 import { DateRangeFilter, useDateRange } from "../components/DateRangeFilter";
 import { ErrorAlert } from "../components/ErrorAlert";
 import { useResolvedMode } from "../components/Layout";
@@ -118,6 +119,7 @@ function DashboardBody({ data }: { data: DashboardData }) {
       </Grid>
 
       <AccountsTable data={data} />
+      <CostBasisPanel compact />
       {data.goals.length > 0 && <GoalsCard data={data} />}
     </>
   );

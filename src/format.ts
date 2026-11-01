@@ -26,3 +26,15 @@ export const penceToInput = (pence: number) => (pence / 100).toFixed(2);
 
 /** Chart axis label: month-end points show as "Apr 26", anything else (period start/end) as "5 Apr 26". */
 export const pointLabel = (d: string) => (dayjs(d).add(1, "day").date() === 1 ? dayjs(d).format("MMM YY") : dayjs(d).format("D MMM YY"));
+
+/** Per-share prices can have fractions of a penny (e.g. $186.34357 converted), so allow up to 4 decimal places. Returns pence. */
+export function parseUnitPounds(input: string): number | null {
+  const cleaned = input.replace(/[£,\s]/g, "");
+  if (!/^\d+(\.\d{0,4})?$/.test(cleaned)) return null;
+  return Number(cleaned) * 100;
+}
+
+export const unitMoney = (pence: number) =>
+  new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(pence / 100);
+
+export const unitToInput = (pence: number) => String(Number((pence / 100).toFixed(4)));

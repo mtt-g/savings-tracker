@@ -72,3 +72,14 @@ export const goalInput = z.object({
   target_date: isoDate.nullable().default(null),
   account_ids: z.array(z.number().int()).nullable().default(null),
 });
+
+export const shareLotInput = z.object({
+  account_id: z.number().int(),
+  name: z.string().trim().min(1).max(100),
+  ticker: z.string().trim().max(50).nullable().default(null),
+  acquired_on: isoDate,
+  quantity: z.number().positive().max(1e9),
+  paid_per_share_pence: z.number().min(0).max(1e9),
+  market_per_share_pence: z.number().min(0).max(1e9).nullable().default(null),
+  notes: z.string().max(500).nullable().default(null),
+});

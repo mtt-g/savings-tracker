@@ -120,3 +120,17 @@ export const TX_TYPE_LABELS: Record<TxType, string> = {
 
 export const isInvestmentType = (t: AccountType) => t === "ss_isa" || t === "gia";
 export const isIsaType = (t: AccountType) => t === "ss_isa" || t === "cash_isa";
+
+export interface ShareLot {
+  id: number;
+  account_id: number;
+  name: string;
+  ticker: string | null;
+  acquired_on: string;
+  quantity: number;
+  /** What you actually paid, in pence per share (fractions allowed). */
+  paid_per_share_pence: number;
+  /** Market price on the day you acquired them, in pence per share. This is normally the tax base cost. Null if unknown. */
+  market_per_share_pence: number | null;
+  notes: string | null;
+}

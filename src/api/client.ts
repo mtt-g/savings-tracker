@@ -1,6 +1,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Dashboard, PeriodStats } from "../../shared/calc";
-import type { Account, Goal, Holding, Settings, SyncRun, Transaction, TxType, Valuation } from "../../shared/types";
+import type { LotComparison } from "../../shared/lots";
+import type { Account, Goal, Holding, Settings, ShareLot, SyncRun, Transaction, TxType, Valuation } from "../../shared/types";
 
 export class ApiError extends Error {
   readonly status: number;
@@ -51,6 +52,7 @@ export interface AccountDetail {
 export type AccountInput = Omit<Account, "id" | "archived"> & { archived: boolean };
 export type TransactionInput = Pick<Transaction, "account_id" | "date" | "type" | "amount_pence" | "notes">;
 export type GoalInput = Omit<Goal, "id">;
+export type ShareLotInput = Omit<ShareLot, "id">;
 
 export interface TransactionFilters {
   account_id?: number;
@@ -85,6 +87,7 @@ export const useTransactions = (filters: TransactionFilters) =>
     placeholderData: keepPreviousData,
   });
 
+export const useShareLots = () => useQuery({ queryKey: ["share-lots"], queryFn: () => api.get<LotComparison[]>("/share-lots") });
 export const useSettings = () => useQuery({ queryKey: ["settings"], queryFn: () => api.get<Settings>("/settings") });
 export const useGoals = () => useQuery({ queryKey: ["goals"], queryFn: () => api.get<Goal[]>("/goals") });
 export const useSyncRuns = () => useQuery({ queryKey: ["sync-runs"], queryFn: () => api.get<SyncRun[]>("/sync-runs") });
