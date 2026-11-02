@@ -6,7 +6,7 @@ import { taxYearOf, taxYearRange } from "../shared/tax";
 import { compareLots } from "../shared/lots";
 import type { Holding, ShareLot, SyncRun, Trade } from "../shared/types";
 import { getAccount, getAccounts, getGoals, getSettings, getTransactions, getValuations } from "./db";
-import { credentialsFor, runSync } from "./t212";
+import { credentialsFor, revalueLinkedAccounts, runSync } from "./t212";
 import type { AppEnv } from "./types";
 import {
   accountInput,
@@ -229,6 +229,7 @@ api.post("/accounts/:id/sync", async (c) => {
   const account = await getAccount(c.env.DB, idParam(c.req.param("id")));
   if (!account) throw notFound();
   const result = await runSync(c.env, account);
+  if (result.ok) await revalueLinkedAccounts(c.env.DB);
   return c.json(result, result.ok ? 200 : 502);
 });
 
@@ -313,6 +314,15 @@ api.get("/share-lots", async (c) => {
   const ledgers = buildLedgers(accounts, transactions, valuations);
   const balances = new Map(accounts.map((a) => [a.id, ledgers.get(a.id)!.valueAt(today)]));
   return c.json(compareLots(lots, { holdings: holdings.results, balances }));
+});
+
+/** Latest synced holdings across every account, for matching share lots to a Trading 212 holding. */
+api.get("/holdings", async (c) => {
+  const { results } = await c.env.DB.prepare(
+    `SELECT h.* FROM holdings h JOIN (SELECT account_id, MAX(date) AS d FROM holdings GROUP BY account_id) m
+     ON m.account_id = h.account_id AND m.d = h.date ORDER BY h.name, h.ticker`,
+  ).all<Holding>();
+  return c.json(results);
 });
 
 api.post("/share-lots", async (c) => {

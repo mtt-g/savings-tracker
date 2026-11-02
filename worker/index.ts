@@ -5,6 +5,9 @@ import { requireAccess } from "./auth";
 import { syncAll } from "./t212";
 import type { AppEnv } from "./types";
 
+/** Must match the first entry in wrangler.jsonc triggers.crons. */
+const FULL_SYNC_CRON = "15 6 * * *";
+
 const app = new Hono<AppEnv>();
 
 app.use("/api/*", requireAccess);
@@ -23,7 +26,8 @@ app.onError((err, c) => {
 
 export default {
   fetch: app.fetch,
-  async scheduled(_controller, env, ctx) {
-    ctx.waitUntil(syncAll(env));
+  async scheduled(controller, env, ctx) {
+    // The 06:15 run is the full sync; the half-hourly market-hours runs only refresh prices.
+    ctx.waitUntil(syncAll(env, { history: controller.cron === FULL_SYNC_CRON }));
   },
 } satisfies ExportedHandler<Env>;

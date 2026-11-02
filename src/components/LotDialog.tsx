@@ -2,8 +2,8 @@ import { Button, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, St
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import dayjs, { type Dayjs } from "dayjs";
 import { useEffect, useState } from "react";
-import type { Holding, ShareLot } from "../../shared/types";
-import { api, useApiMutation, type ShareLotInput } from "../api/client";
+import type { ShareLot } from "../../shared/types";
+import { api, useAllHoldings, useApiMutation, type ShareLotInput } from "../api/client";
 import { money, parseUnitPounds, unitToInput } from "../format";
 import { ErrorAlert } from "./ErrorAlert";
 import { MoneyField } from "./MoneyField";
@@ -12,12 +12,13 @@ interface Props {
   open: boolean;
   onClose: () => void;
   accountId: number;
-  /** Latest synced holdings, if the account has any, so the lot can be matched to one by ticker. */
-  holdings: Holding[];
   lot?: ShareLot;
 }
 
-export function LotDialog({ open, onClose, accountId, holdings, lot }: Props) {
+export function LotDialog({ open, onClose, accountId, lot }: Props) {
+  const { data: allHoldings = [] } = useAllHoldings();
+  // The same stock can be held in two Trading 212 accounts; list each ticker once.
+  const holdings = [...new Map(allHoldings.map((h) => [h.ticker, h])).values()];
   const [name, setName] = useState("");
   const [ticker, setTicker] = useState("");
   const [date, setDate] = useState<Dayjs | null>(null);
@@ -62,7 +63,7 @@ export function LotDialog({ open, onClose, accountId, holdings, lot }: Props) {
             helperText="Optional. The share price on the day you got them, usually your tax base cost" />
           {holdings.length > 0 && (
             <TextField select label="Matching Trading 212 holding" value={ticker} onChange={(e) => setTicker(e.target.value)}
-              helperText="Used to price these shares from the daily sync">
+              helperText="Prices these shares from the Trading 212 sync, even if the holding is in a different account">
               <MenuItem value="">None</MenuItem>
               {holdings.map((h) => <MenuItem key={h.ticker} value={h.ticker}>{h.name ?? h.ticker} ({h.ticker})</MenuItem>)}
             </TextField>

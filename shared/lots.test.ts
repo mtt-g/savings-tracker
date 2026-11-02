@@ -46,6 +46,18 @@ describe("compareLots", () => {
     expect(unmatched.valueSource).toBeNull();
   });
 
+  it("prices a lot from the same stock held in another account", () => {
+    // 76 shares in the ISA (account 2) are worth GBP 4,689.74, so each is GBP 61.7071. The EquatePlus lot is in account 1.
+    const ctx = { holdings: [holding(2, "FLUT_US_EQ", 76, 468974)], balances: new Map([[1, 100], [2, 468974]]) };
+    const [a, b] = compareLots(
+      [lot(1, 1, { ticker: "FLUT_US_EQ", quantity: 72 }), lot(2, 1, { ticker: "FLUT_US_EQ", quantity: 4 })],
+      ctx,
+    );
+    expect(a.valueSource).toBe("holding");
+    expect(a.currentValue).toBe(444291);
+    expect(b.currentValue).toBe(24683);
+  });
+
   it("totals only count lots where each figure is known", () => {
     const items = compareLots(
       [lot(1, 1, { quantity: 72 }), lot(2, 1, { quantity: 4, paid_per_share_pence: 0, market_per_share_pence: null })],

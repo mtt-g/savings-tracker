@@ -94,6 +94,7 @@ export const useTrades = (accountId: number, from?: string, to?: string) =>
     placeholderData: keepPreviousData,
   });
 export const useShareLots = () => useQuery({ queryKey: ["share-lots"], queryFn: () => api.get<LotComparison[]>("/share-lots") });
+export const useAllHoldings = () => useQuery({ queryKey: ["holdings"], queryFn: () => api.get<Holding[]>("/holdings") });
 export const useSettings = () => useQuery({ queryKey: ["settings"], queryFn: () => api.get<Settings>("/settings") });
 export const useGoals = () => useQuery({ queryKey: ["goals"], queryFn: () => api.get<Goal[]>("/goals") });
 export const useSyncRuns = () => useQuery({ queryKey: ["sync-runs"], queryFn: () => api.get<SyncRun[]>("/sync-runs") });

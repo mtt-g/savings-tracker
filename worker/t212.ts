@@ -265,7 +265,12 @@ async function syncStream<T, R extends { external_ref: string }>(
   return { inserted, backfillDone: done };
 }
 
-export async function syncAccount(env: Env, account: Account): Promise<string> {
+/**
+ * Syncs one account. With `history: false` only the account value and holdings are refreshed (2 API calls), which is
+ * what the frequent price refresh uses; the daily run and "Sync now" also pull transactions, dividends and trades.
+ */
+export async function syncAccount(env: Env, account: Account, opts: { history?: boolean } = {}): Promise<string> {
+  const history = opts.history ?? true;
   if (!account.t212_link) throw new T212Error(`${account.name} isn't linked to Trading 212`);
   const auth = credentialsFor(env, account.t212_link);
   if (!auth) {
@@ -308,6 +313,8 @@ export async function syncAccount(env: Env, account: Account): Promise<string> {
     ),
   ]);
 
+  if (!history) return `Value £${summary.totalValue.toFixed(2)}, ${positions.length} holdings`;
+
   const insertTx = (rows: Row[]) => insertRows(db, account.id, rows);
   const tx = await syncStream<HistoryTransaction, Row>(
     db, auth, account.id, "transactions", `/equity/history/transactions?limit=${PAGE_LIMIT}`, mapTransaction, insertTx,
@@ -331,30 +338,78 @@ export async function syncAccount(env: Env, account: Account): Promise<string> {
 }
 
 /** Syncs one account and records the run in sync_runs. */
-export async function runSync(env: Env, account: Account): Promise<{ ok: boolean; message: string }> {
-  const run = await env.DB.prepare("INSERT INTO sync_runs (account_id, status) VALUES (?, 'running') RETURNING id")
+export async function runSync(env: Env, account: Account, opts: { history?: boolean } = {}): Promise<{ ok: boolean; message: string }> {
+  const history = opts.history ?? true;
+  // Frequent price refreshes would swamp the run log, so they only record failures.
+  const run = !history ? null : await env.DB.prepare("INSERT INTO sync_runs (account_id, status) VALUES (?, 'running') RETURNING id")
     .bind(account.id)
     .first<{ id: number }>();
   let ok = true;
   let message: string;
   try {
-    message = await syncAccount(env, account);
+    message = await syncAccount(env, account, opts);
   } catch (e) {
     ok = false;
     message = e instanceof T212Error ? e.message : `Unexpected error: ${e instanceof Error ? e.message : String(e)}`;
     if (!(e instanceof T212Error)) console.error("T212 sync failed", e);
   }
-  await env.DB.prepare("UPDATE sync_runs SET status = ?, message = ?, finished_at = datetime('now') WHERE id = ?")
-    .bind(ok ? "ok" : "error", message, run!.id)
-    .run();
+  if (run) {
+    await env.DB.prepare("UPDATE sync_runs SET status = ?, message = ?, finished_at = datetime('now') WHERE id = ?")
+      .bind(ok ? "ok" : "error", message, run.id)
+      .run();
+  } else if (!ok) {
+    await env.DB.prepare("INSERT INTO sync_runs (account_id, status, message, finished_at) VALUES (?, 'error', ?, datetime('now'))")
+      .bind(account.id, message)
+      .run();
+  }
   return { ok, message };
 }
 
-export async function syncAll(env: Env) {
+/**
+ * Values accounts that aren't synced (for example an EquatePlus share plan) from the share prices of their lots'
+ * Trading 212 holdings, and records the result as today's balance. Skipped for an account unless every one of its lots
+ * has a ticker with a synced holding, so a half-priced total is never written.
+ */
+export async function revalueLinkedAccounts(db: D1Database) {
+  const today = todayLondon();
+  const { results: lots } = await db
+    .prepare(
+      `SELECT l.account_id, l.ticker, l.quantity FROM share_lots l JOIN accounts a ON a.id = l.account_id
+       WHERE a.t212_link IS NULL AND a.archived = 0`,
+    )
+    .all<{ account_id: number; ticker: string | null; quantity: number }>();
+  if (!lots.length) return;
+  const { results: holdings } = await db
+    .prepare(
+      `SELECT h.ticker, h.quantity, h.value_pence FROM holdings h
+       JOIN (SELECT account_id, MAX(date) AS d FROM holdings GROUP BY account_id) m ON m.account_id = h.account_id AND m.d = h.date
+       WHERE h.quantity > 0`,
+    )
+    .all<{ ticker: string; quantity: number; value_pence: number }>();
+  const perShare = new Map(holdings.map((h) => [h.ticker, h.value_pence / h.quantity]));
+
+  const totals = new Map<number, number | null>();
+  for (const l of lots) {
+    const price = l.ticker ? perShare.get(l.ticker) : undefined;
+    const prev = totals.get(l.account_id);
+    if (price === undefined || prev === null) totals.set(l.account_id, null);
+    else totals.set(l.account_id, (prev ?? 0) + l.quantity * price);
+  }
+  const stmt = db.prepare(
+    `INSERT INTO valuations (account_id, date, value_pence, source) VALUES (?, ?, ?, 'linked')
+     ON CONFLICT (account_id, date) DO UPDATE SET value_pence = excluded.value_pence, source = 'linked'`,
+  );
+  const writes = [...totals].filter(([, v]) => v !== null).map(([id, v]) => stmt.bind(id, today, Math.round(v!)));
+  if (writes.length) await db.batch(writes);
+}
+
+export async function syncAll(env: Env, opts: { history?: boolean } = {}) {
   const { results } = await env.DB.prepare(
     "SELECT * FROM accounts WHERE t212_link IS NOT NULL AND archived = 0",
   ).all<Account>();
-  for (const a of results) await runSync(env, a);
+  for (const a of results) await runSync(env, a, opts);
+  await revalueLinkedAccounts(env.DB);
+  if (opts.history === false) return;
   // Keep the run log short.
   await env.DB.prepare("DELETE FROM sync_runs WHERE started_at < datetime('now', '-90 days')").run();
 }

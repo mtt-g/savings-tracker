@@ -12,12 +12,13 @@ It costs nothing on Cloudflare's free plan.
   - **allowances**: ISA (£20k, plus the £12k Cash ISA limit from 2027/28), Personal Savings Allowance (taxable interest only) and dividend allowance
   - **Premium Bonds**: prizes, your actual rate compared with the prize fund rate, and the £50k limit
   - a per-account breakdown, plus goals
-- **Trading 212 sync**: daily at 06:15 UTC, or on demand. It pulls account value, holdings, every buy and sell (with fees and realised profit or loss, on the account's Trades tab), deposits, withdrawals, interest, fees, transfers and dividends, and backfills the full history over a few runs.
+- **Trading 212 sync**: a full sync daily at 06:15 UTC (or on demand), plus a price refresh every 30 minutes Monday to Friday, 08:00 to 21:30 UTC, which updates account values and holdings. It pulls account value, holdings, every buy and sell (with fees and realised profit or loss, on the account's Trades tab), deposits, withdrawals, interest, fees, transfers and dividends, and backfills the full history over a few runs.
 - **CSV import**: detects Trading 212 and Monzo exports automatically, and maps columns for anything else. You preview the rows and can retype them before importing, and re-importing a file doesn't create duplicates.
 - **Cost basis for discounted shares** (for example Sharesave/SAYE): record each batch with what you paid, what it was worth the day you got it
   (the tax base cost) and the number of shares. A chart and table compare what you paid, what it was worth then and what it's worth now,
-  on the account's Cost basis tab and on the dashboard. Current value comes from a matching synced Trading 212 holding, or from the account's balance
-  for an account holding a single stock.
+  on the account's Cost basis tab and on the dashboard. Current value comes from a matching synced Trading 212 holding (in any account, so EquatePlus
+  shares can use the price of the same stock in your ISA), or from the account's balance for an account holding a single stock. When every lot in a
+  non-synced account is matched this way, each sync also records the account's balance as shares × price.
 - Manual transactions and balances, dark mode, and an installable mobile app (PWA).
 
 ## How the numbers work

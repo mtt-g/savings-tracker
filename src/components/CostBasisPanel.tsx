@@ -4,7 +4,7 @@ import { BarChart } from "@mui/x-charts/BarChart";
 import { useState } from "react";
 import { Link } from "react-router";
 import { totalLots, type LotComparison } from "../../shared/lots";
-import type { Holding, ShareLot } from "../../shared/types";
+import type { ShareLot } from "../../shared/types";
 import { useShareLots } from "../api/client";
 import { date, money, moneyCompact, signedMoney, unitMoney } from "../format";
 import { seriesColor } from "../theme";
@@ -15,7 +15,6 @@ import { useResolvedMode } from "./Layout";
 interface Props {
   /** Show one account's lots. Without it, every account's lots are combined (dashboard). */
   accountId?: number;
-  holdings?: Holding[];
   compact?: boolean;
 }
 
@@ -23,7 +22,7 @@ interface Props {
  * Compares three figures for shares you acquired at a discount: what you paid, what they were worth the day you got
  * them (the tax base cost), and what they're worth now.
  */
-export function CostBasisPanel({ accountId, holdings = [], compact }: Props) {
+export function CostBasisPanel({ accountId, compact }: Props) {
   const { data: all = [] } = useShareLots();
   const mode = useResolvedMode();
   const [editing, setEditing] = useState<ShareLot | undefined>();
@@ -31,7 +30,7 @@ export function CostBasisPanel({ accountId, holdings = [], compact }: Props) {
   const items = accountId ? all.filter((c) => c.lot.account_id === accountId) : all;
 
   const add = () => { setEditing(undefined); setOpen(true); };
-  const dialog = accountId ? <LotDialog open={open} onClose={() => setOpen(false)} accountId={accountId} holdings={holdings} lot={editing} /> : null;
+  const dialog = accountId ? <LotDialog open={open} onClose={() => setOpen(false)} accountId={accountId} lot={editing} /> : null;
 
   if (!items.length) {
     if (compact || !accountId) return null;

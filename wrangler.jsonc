@@ -18,8 +18,9 @@
     }
   ],
   "triggers": {
-    // Daily Trading 212 sync at 06:15 UTC
-    "crons": ["15 6 * * *"]
+    // 1st: full Trading 212 sync daily at 06:15 UTC (must match FULL_SYNC_CRON in worker/index.ts).
+    // 2nd: price refresh every 30 minutes, Monday to Friday 08:00 to 21:30 UTC (London and US market hours).
+    "crons": ["15 6 * * *", "*/30 8-21 * * 1-5"]
   },
   "vars": {
     // Cloudflare Access settings, see README. The API refuses requests until these are set.

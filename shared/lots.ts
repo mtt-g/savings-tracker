@@ -30,7 +30,8 @@ const round = Math.round;
 
 /**
  * Prices each lot.
- * - A lot with a ticker that matches a synced holding uses that holding's value per share.
+ * - A lot with a ticker that matches a synced holding, in its own account or any other, uses that holding's value
+ *   per share.
  * - Otherwise, in an account with no synced holdings (for example an EquatePlus share plan account that holds
  *   one stock), the account balance left after matched lots is shared out between the remaining lots by quantity.
  * - Otherwise the lot can't be priced and shows cost only.
@@ -46,7 +47,12 @@ export function compareLots(lots: ShareLot[], ctx: LotContext): LotComparison[] 
     let matchedValue = 0;
     const unmatched: ShareLot[] = [];
     for (const lot of accountLots) {
-      const h = lot.ticker ? synced.find((x) => x.ticker === lot.ticker && x.quantity > 0) : undefined;
+      // Prefer the lot's own account, but the same stock held in another account prices it just as well (for
+      // example EquatePlus shares that are also held in a Trading 212 ISA).
+      const h = lot.ticker
+        ? (synced.find((x) => x.ticker === lot.ticker && x.quantity > 0) ??
+          ctx.holdings.find((x) => x.ticker === lot.ticker && x.quantity > 0))
+        : undefined;
       if (h) {
         const value = round((lot.quantity * h.value_pence) / h.quantity);
         priced.set(lot.id, { value, source: "holding" });
