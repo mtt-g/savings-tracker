@@ -1,4 +1,4 @@
-export const ACCOUNT_TYPES = ["cash", "cash_isa", "ss_isa", "gia", "premium_bonds"] as const;
+export const ACCOUNT_TYPES = ["cash", "cash_isa", "ss_isa", "gia", "premium_bonds", "pension"] as const;
 export type AccountType = (typeof ACCOUNT_TYPES)[number];
 
 export const PROVIDERS = ["monzo", "nsandi", "trading212", "other"] as const;
@@ -97,6 +97,7 @@ export const ACCOUNT_TYPE_LABELS: Record<AccountType, string> = {
   ss_isa: "Stocks & Shares ISA",
   gia: "Investment account (GIA)",
   premium_bonds: "Premium Bonds",
+  pension: "Workplace pension",
 };
 
 export const PROVIDER_LABELS: Record<Provider, string> = {
@@ -118,7 +119,7 @@ export const TX_TYPE_LABELS: Record<TxType, string> = {
   transfer_out: "Transfer out",
 };
 
-export const isInvestmentType = (t: AccountType) => t === "ss_isa" || t === "gia";
+export const isInvestmentType = (t: AccountType) => t === "ss_isa" || t === "gia" || t === "pension";
 export const isIsaType = (t: AccountType) => t === "ss_isa" || t === "cash_isa";
 
 export interface ShareLot {

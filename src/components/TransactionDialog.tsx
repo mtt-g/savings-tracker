@@ -14,6 +14,7 @@ const TYPES_FOR: Record<AccountType, TxType[]> = {
   cash_isa: ["deposit", "withdrawal", "interest", "bonus", "transfer_in", "transfer_out", "fee"],
   premium_bonds: ["deposit", "withdrawal", "prize", "transfer_in", "transfer_out"],
   ss_isa: ["deposit", "withdrawal", "dividend", "interest", "fee", "bonus", "transfer_in", "transfer_out"],
+  pension: ["deposit", "withdrawal", "fee", "bonus", "transfer_in", "transfer_out"],
   gia: ["deposit", "withdrawal", "dividend", "interest", "fee", "bonus", "transfer_in", "transfer_out"],
 };
 

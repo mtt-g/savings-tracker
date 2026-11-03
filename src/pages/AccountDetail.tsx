@@ -90,7 +90,7 @@ export function AccountDetail() {
         <Tab value="transactions" label={`Transactions (${transactions.length})`} />
         {hasHoldings && <Tab value="holdings" label="Holdings" />}
         {account.t212_link && <Tab value="trades" label="Trades" />}
-        {isInvestmentType(account.type) && <Tab value="cost" label="Cost basis" />}
+        {isInvestmentType(account.type) && account.type !== "pension" && <Tab value="cost" label="Cost basis" />}
         <Tab value="balances" label="Balances" />
       </Tabs>
 
@@ -98,7 +98,7 @@ export function AccountDetail() {
       {tab === "transactions" && <Card><TransactionsTable transactions={transactions} showAccount={false} /></Card>}
       {tab === "holdings" && hasHoldings && <Holdings data={data} />}
       {tab === "trades" && account.t212_link && <TradesPanel accountId={id} />}
-      {tab === "cost" && isInvestmentType(account.type) && <CostBasisPanel accountId={id} />}
+      {tab === "cost" && isInvestmentType(account.type) && account.type !== "pension" && <CostBasisPanel accountId={id} />}
       {tab === "balances" && <Balances data={data} />}
 
       <AccountDialog open={dialog === "edit"} onClose={() => setDialog(null)} account={account} />
