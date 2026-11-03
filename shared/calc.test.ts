@@ -152,4 +152,24 @@ describe("computeDashboard", () => {
     expect(d.monthly.map((m) => m.month)).toEqual(["2026-04", "2026-05", "2026-06", "2026-07", "2026-08", "2026-09", "2026-10"]);
     expect(d.monthly[1].contributions).toBe(17_000_00);
   });
+
+  it("keeps pensions out of the totals unless asked", () => {
+    const base = {
+      accounts: [acct(1, "cash"), acct(2, "pension")],
+      transactions: [tx(1, "2026-05-01", "deposit", 1000), tx(2, "2026-05-01", "deposit", 500_000)],
+      valuations: [],
+      settings: { tax_band: "basic" as const, premium_bonds_prize_rate: 3.6 },
+      goals: [],
+      from: "2026-04-06",
+      to: "2026-10-31",
+      today: "2026-10-31",
+    };
+    const without = computeDashboard(base);
+    expect(without.totals.endValue).toBe(1000_00);
+    expect(without.accounts).toHaveLength(1);
+    expect(without.pensions?.stats.endValue).toBe(500_000_00);
+    const withP = computeDashboard({ ...base, includePensions: true });
+    expect(withP.totals.endValue).toBe(501_000_00);
+    expect(withP.accounts).toHaveLength(2);
+  });
 });

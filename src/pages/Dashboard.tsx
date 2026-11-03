@@ -10,10 +10,12 @@ import {
   Card,
   CardContent,
   CardHeader,
+  FormControlLabel,
   Grid,
   LinearProgress,
   Link as MuiLink,
   Stack,
+  Switch,
   Table,
   TableBody,
   TableCell,
@@ -24,6 +26,7 @@ import {
 import { BarChart } from "@mui/x-charts/BarChart";
 import { LineChart, lineClasses } from "@mui/x-charts/LineChart";
 import dayjs from "dayjs";
+import { useState } from "react";
 import { Link } from "react-router";
 import type { Dashboard as DashboardData } from "../../shared/calc";
 import { isInvestmentType } from "../../shared/types";
@@ -39,7 +42,8 @@ import { pointLabel } from "../format";
 
 export function Dashboard() {
   const [range, setRange] = useDateRange();
-  const { data, error, isLoading, isFetching } = useDashboard(range.from, range.to);
+  const [includePensions, setIncludePensions] = useState(false);
+  const { data, error, isLoading, isFetching } = useDashboard(range.from, range.to, includePensions);
 
   return (
     <Stack spacing={3}>
@@ -48,7 +52,11 @@ export function Dashboard() {
           <Typography variant="h4" sx={{ fontWeight: 500 }}>Dashboard</Typography>
           {data && <Typography color="text.secondary">{date(data.from)} – {date(data.to)}</Typography>}
         </Box>
-        <DateRangeFilter value={range} onChange={setRange} />
+        <Stack direction="row" spacing={2} sx={{ alignItems: "center" }}>
+          <FormControlLabel label="Include pensions"
+            control={<Switch checked={includePensions} onChange={(e) => setIncludePensions(e.target.checked)} />} />
+          <DateRangeFilter value={range} onChange={setRange} />
+        </Stack>
       </Stack>
       <Box sx={{ height: 4 }}>{isFetching && <LinearProgress />}</Box>
       <ErrorAlert error={error} />
@@ -62,7 +70,7 @@ function DashboardBody({ data }: { data: DashboardData }) {
   const { totals, investments, premiumBonds } = data;
   const taxableInterest = data.allowances.psa.used;
 
-  if (data.accounts.length === 0 || (totals.endValue === 0 && totals.startValue === 0 && totals.netContributions === 0)) {
+  if (!data.pensions && data.accounts.length === 0 || (totals.endValue === 0 && totals.startValue === 0 && totals.netContributions === 0)) {
     return (
       <Alert severity="info">
         Nothing recorded in this period yet. Add a transaction with the + button, import a CSV from the{" "}
@@ -101,6 +109,8 @@ function DashboardBody({ data }: { data: DashboardData }) {
         </Grid>
       </Grid>
 
+      {data.pensions && <PensionsCard pensions={data.pensions} />}
+
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, lg: 8 }}>
           <BalanceChart data={data} />
@@ -130,6 +140,50 @@ function useAccountColor() {
   const { data: accounts = [] } = useAccounts();
   const mode = useResolvedMode();
   return (id: number) => seriesColor(Math.max(0, accounts.findIndex((a) => a.id === id)), mode);
+}
+
+function PensionsCard({ pensions }: { pensions: NonNullable<DashboardData["pensions"]> }) {
+  const { stats } = pensions;
+  const color = useAccountColor();
+  const single = pensions.accounts.length === 1 ? pensions.accounts[0].account : null;
+  return (
+    <Card>
+      <CardHeader title="Pensions" subheader="Locked until retirement, so kept out of the totals above unless you include them"
+        slotProps={{ title: { variant: "h6" } }} />
+      <CardContent sx={{ pt: 0 }}>
+        <Grid container spacing={3} sx={{ alignItems: "center" }}>
+          <Grid size={{ xs: 12, md: 4 }}>
+            <Stack spacing={1.5}>
+              <Box>
+                <Typography variant="body2" color="text.secondary">Value</Typography>
+                <Typography variant="h5" sx={{ fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>
+                  {single ? <MuiLink component={Link} to={`/accounts/${single.id}`} underline="hover" color="inherit">{money(stats.endValue)}</MuiLink> : money(stats.endValue)}
+                </Typography>
+              </Box>
+              <Typography variant="body2" color="text.secondary">
+                {money(stats.netContributions)} contributed in this period, {signedMoney(stats.growth)} growth
+                {stats.returnPct != null ? ` (${signedPct(stats.returnPct)} return)` : ""}
+              </Typography>
+            </Stack>
+          </Grid>
+          <Grid size={{ xs: 12, md: 8 }}>
+            <LineChart
+              height={160}
+              xAxis={[{ data: pensions.series.map((p) => p.date), scaleType: "point", valueFormatter: pointLabel }]}
+              yAxis={[{ valueFormatter: (v: number) => moneyCompact(v * 100), width: 60 }]}
+              series={[{
+                id: "pensions", label: "Pension value", data: pensions.series.map((p) => p.value / 100),
+                color: color(pensions.accounts[0].account.id), curve: "linear", showMark: false,
+                valueFormatter: (v: number | null) => (v == null ? "" : money(v * 100)),
+              }]}
+              grid={{ horizontal: true }}
+              hideLegend
+            />
+          </Grid>
+        </Grid>
+      </CardContent>
+    </Card>
+  );
 }
 
 function BalanceChart({ data }: { data: DashboardData }) {

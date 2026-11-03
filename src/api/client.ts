@@ -68,10 +68,10 @@ const qs = (o: object) => {
   return s ? `?${s}` : "";
 };
 
-export const useDashboard = (from: string, to: string) =>
+export const useDashboard = (from: string, to: string, includePensions = false) =>
   useQuery({
-    queryKey: ["dashboard", from, to],
-    queryFn: () => api.get<Dashboard>(`/dashboard${qs({ from, to })}`),
+    queryKey: ["dashboard", from, to, includePensions],
+    queryFn: () => api.get<Dashboard>(`/dashboard${qs({ from, to, ...(includePensions ? { include_pensions: "1" } : {}) })}`),
     placeholderData: keepPreviousData,
   });
 

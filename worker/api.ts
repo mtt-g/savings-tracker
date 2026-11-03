@@ -51,7 +51,7 @@ api.get("/dashboard", async (c) => {
       ? [transactions[0]?.date, valuations[0]?.date, to].filter((d): d is string => !!d).sort()[0]
       : parse(isoDate, fromParam, "from");
   if (from > to) throw new HTTPException(400, { message: "'from' must be on or before 'to'" });
-  return c.json(computeDashboard({ accounts, transactions, valuations, settings, goals, from, to, today }));
+  return c.json(computeDashboard({ accounts, transactions, valuations, settings, goals, from, to, today, includePensions: c.req.query("include_pensions") === "1" }));
 });
 
 // ---------- Accounts ----------

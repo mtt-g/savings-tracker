@@ -297,6 +297,14 @@ export interface Dashboard {
   allowances: Allowances;
   premiumBonds: PremiumBondsSummary | null;
   goals: GoalProgress[];
+  /** Pension accounts, always summarised here; they're only in the figures above when includePensions is set. */
+  pensions: PensionSummary | null;
+}
+
+export interface PensionSummary {
+  stats: PeriodStats;
+  accounts: AccountPeriod[];
+  series: { date: string; value: number }[];
 }
 
 export interface DashboardInput {
@@ -308,6 +316,8 @@ export interface DashboardInput {
   from: string;
   to: string;
   today?: string;
+  /** Pensions are locked away, so by default they're left out of the totals, charts and account table. */
+  includePensions?: boolean;
 }
 
 function aggregate(items: AccountPeriod[], ledgers: Map<number, Ledger>, from: string, to: string): PeriodStats {
@@ -345,14 +355,16 @@ export function computeDashboard(input: DashboardInput): Dashboard {
     (p) => !p.account.archived || p.stats.startValue !== 0 || p.stats.endValue !== 0 || p.stats.netContributions !== 0,
   );
 
-  const investmentAccounts = visible.filter((p) => isInvestmentType(p.account.type));
-  const totals = aggregate(visible, ledgers, from, to);
+  const pensionAccounts = visible.filter((p) => p.account.type === "pension");
+  const shown = input.includePensions ? visible : visible.filter((p) => p.account.type !== "pension");
+  const investmentAccounts = shown.filter((p) => isInvestmentType(p.account.type));
+  const totals = aggregate(shown, ledgers, from, to);
 
   // Balance over time: one point before the period starts, then every month end.
   const seriesDates = [addDays(from, -1), ...monthEndsBetween(from, to)];
   const series = seriesDates.map((date) => ({
     date,
-    values: Object.fromEntries(visible.map((p) => [p.account.id, ledgers.get(p.account.id)!.valueAt(date)])),
+    values: Object.fromEntries(shown.map((p) => [p.account.id, ledgers.get(p.account.id)!.valueAt(date)])),
   }));
 
   const monthlyMap = new Map<string, MonthlyFlow>();
@@ -360,7 +372,7 @@ export function computeDashboard(input: DashboardInput): Dashboard {
     const month = d.slice(0, 7);
     monthlyMap.set(month, { month, contributions: 0, income: 0 });
   }
-  for (const p of visible) {
+  for (const p of shown) {
     for (const t of ledgers.get(p.account.id)!.txsBetween(from, to)) {
       const m = monthlyMap.get(t.date.slice(0, 7));
       if (!m) continue;
@@ -408,7 +420,7 @@ export function computeDashboard(input: DashboardInput): Dashboard {
 
   const currentTy = taxYearRange(taxYearOf(today));
   const goalProgress = goals.map((goal) => {
-    const ids = goal.account_ids ?? accounts.map((a) => a.id);
+    const ids = goal.account_ids ?? accounts.filter((a) => a.type !== "pension").map((a) => a.id);
     let current = 0;
     for (const id of ids) {
       const l = ledgers.get(id);
@@ -424,12 +436,22 @@ export function computeDashboard(input: DashboardInput): Dashboard {
     to,
     totals,
     investments: investmentAccounts.length ? aggregate(investmentAccounts, ledgers, from, to) : null,
-    accounts: visible,
+    accounts: shown,
     series,
     monthly: [...monthlyMap.values()],
     allowances,
     premiumBonds,
     goals: goalProgress,
+    pensions: pensionAccounts.length
+      ? {
+          stats: aggregate(pensionAccounts, ledgers, from, to),
+          accounts: pensionAccounts,
+          series: seriesDates.map((date) => ({
+            date,
+            value: pensionAccounts.reduce((s, p) => s + ledgers.get(p.account.id)!.valueAt(date), 0),
+          })),
+        }
+      : null,
   };
 }
 
