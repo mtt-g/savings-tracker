@@ -313,7 +313,7 @@ export async function syncAccount(env: Env, account: Account, opts: { history?: 
     ),
   ]);
 
-  if (!history) return `Value £${summary.totalValue.toFixed(2)}, ${positions.length} holdings`;
+  if (!history) return `${PRICE_REFRESH_PREFIX}Value £${summary.totalValue.toFixed(2)}, ${positions.length} holdings`;
 
   const insertTx = (rows: Row[]) => insertRows(db, account.id, rows);
   const tx = await syncStream<HistoryTransaction, Row>(
@@ -337,10 +337,12 @@ export async function syncAccount(env: Env, account: Account, opts: { history?: 
   return parts.join(", ");
 }
 
+/** Prefix on the message of price-only refresh runs, which replace each other in sync_runs. */
+const PRICE_REFRESH_PREFIX = "Prices refreshed: ";
+
 /** Syncs one account and records the run in sync_runs. */
 export async function runSync(env: Env, account: Account, opts: { history?: boolean } = {}): Promise<{ ok: boolean; message: string }> {
   const history = opts.history ?? true;
-  // Frequent price refreshes would swamp the run log, so they only record failures.
   const run = !history ? null : await env.DB.prepare("INSERT INTO sync_runs (account_id, status) VALUES (?, 'running') RETURNING id")
     .bind(account.id)
     .first<{ id: number }>();
@@ -357,10 +359,14 @@ export async function runSync(env: Env, account: Account, opts: { history?: bool
     await env.DB.prepare("UPDATE sync_runs SET status = ?, message = ?, finished_at = datetime('now') WHERE id = ?")
       .bind(ok ? "ok" : "error", message, run.id)
       .run();
-  } else if (!ok) {
-    await env.DB.prepare("INSERT INTO sync_runs (account_id, status, message, finished_at) VALUES (?, 'error', ?, datetime('now'))")
-      .bind(account.id, message)
-      .run();
+  } else {
+    // Price refreshes keep a single row per account (replacing the previous one) so the "last sync" time stays current
+    // without filling the run log.
+    await env.DB.batch([
+      env.DB.prepare("DELETE FROM sync_runs WHERE account_id = ? AND message LIKE ?").bind(account.id, `${PRICE_REFRESH_PREFIX}%`),
+      env.DB.prepare("INSERT INTO sync_runs (account_id, status, message, finished_at) VALUES (?, ?, ?, datetime('now'))")
+        .bind(account.id, ok ? "ok" : "error", message),
+    ]);
   }
   return { ok, message };
 }
